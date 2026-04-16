@@ -79,7 +79,7 @@ jobs:
         run: |
          docker run --rm --privileged \
          -v ${{ github.workspace }}:/buildd/sources \
-         ghcr.io/droidian/debos:latest \
+         droidian/static_web:latest \
          /bin/sh -c 'set -e
          cd /buildd/sources
          DROIDIAN_VERSION="nightly" \

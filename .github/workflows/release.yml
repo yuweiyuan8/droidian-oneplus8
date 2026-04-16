@@ -3,28 +3,30 @@ name: droidian rootfs-builder
 on:
   workflow_dispatch:
   push:
+    branches:
+      - trixie
   schedule:
     - cron: "59 23 * * *"
 
 jobs:
   once:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     name: Generate matrix
     outputs:
       matrix: ${{ steps.gen-matrix.outputs.matrix }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Generate matrix
         id: gen-matrix
         run: |
           JOBS="$(./generate_device_recipe.py --matrix)"
-          echo ::set-output name=matrix::${JOBS}
+          echo "matrix=${JOBS}" >> $GITHUB_OUTPUT
 
   build:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: once
 
     strategy:
@@ -53,16 +55,16 @@ jobs:
         run: echo "DROIDIAN_IDENTIFIER=${{ matrix.config.product }}-${{ matrix.config.arch }}-${{ matrix.config.edition }}-${{ matrix.config.variant }}-${{ matrix.config.apilevel }}" >> $GITHUB_ENV
 
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
         with:
-          lfs: 'true'
-          submodules: 'recursive'
+          lfs: true
+          submodules: recursive
 
       - name: Checkout submodules
         run: git submodule update --init --recursive
 
       - name: QEMU set-up
-        uses: docker/setup-qemu-action@v1
+        uses: docker/setup-qemu-action@v3
 
       - name: Create build dir
         run: mkdir -p /tmp/buildd-results
@@ -71,14 +73,14 @@ jobs:
         run: docker pull quay.io/droidian/rootfs-builder:bookworm-amd64
 
       - name: Start Container
-        run: echo CONTAINER_HASH=$(docker run --detach --privileged -v /tmp/buildd-results:/buildd/out -v /dev:/host-dev -v /sys/fs/cgroup:/sys/fs/cgroup -v ${PWD}:/buildd/sources --security-opt seccomp:unconfined quay.io/droidian/rootfs-builder:bookworm-amd64 /sbin/init) >> $GITHUB_ENV
+        run: echo "CONTAINER_HASH=$(docker run --detach --privileged -v /tmp/buildd-results:/buildd/out -v /dev:/host-dev -v /sys/fs/cgroup:/sys/fs/cgroup -v ${PWD}:/buildd/sources --security-opt seccomp:unconfined quay.io/droidian/rootfs-builder:bookworm-amd64 /sbin/init)" >> $GITHUB_ENV
 
       - name: Build rootfs
         run: |
           docker exec $CONTAINER_HASH /bin/sh -c 'cd /buildd/sources; DROIDIAN_VERSION="${{ env.DROIDIAN_VERSION }}" ./generate_device_recipe.py ${{ matrix.config.product }} ${{ matrix.config.arch }} ${{ matrix.config.edition }} ${{ matrix.config.variant }} ${{ matrix.config.apilevel }} && debos --disable-fakemachine generated/droidian.yaml'
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: droidian-out-${{ matrix.config.product }}-${{ matrix.config.arch }}-${{ matrix.config.edition }}-${{ matrix.config.variant }}-${{ matrix.config.apilevel }}
           path: out/*
@@ -86,11 +88,11 @@ jobs:
           retention-days: 1
 
   prepare:
-    runs-on: ubuntu-20.04
-    name: Create GitHub release
+    runs-on: ubuntu-22.04
+    name: Prepare release
     needs: build
     outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}${{ steps.create_nightly.outputs.upload_url }}
+      upload_url: ${{ steps.release.outputs.upload_url }}
 
     steps:
       - name: Free up some storage
@@ -104,20 +106,20 @@ jobs:
           swap-storage: true
 
       - name: Delete old nightly release
-        uses: dev-drprasad/delete-tag-and-release@v0.2.1
         if: startsWith(github.ref, 'refs/tags/droidian') != true
+        uses: dev-drprasad/delete-tag-and-release@v0.2.1
         with:
-          delete_release: true # default: false
-          tag_name: nightly # tag name to delete
+          delete_release: true
+          tag_name: nightly
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Delete old droidian-installer release
-        uses: dev-drprasad/delete-tag-and-release@v0.2.1
         if: startsWith(github.ref, 'refs/tags/droidian') != true
+        uses: dev-drprasad/delete-tag-and-release@v0.2.1
         with:
-          delete_release: true # default: false
-          tag_name: droidian-installer  # tag name to delete
+          delete_release: true
+          tag_name: droidian-installer
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -129,7 +131,7 @@ jobs:
           tag: nightly
 
       - name: Download artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: droidian-out
 
@@ -142,32 +144,18 @@ jobs:
             cd ..
           done
 
-      - name: Create stable release (drafted)
-        id: create_release
-        if: startsWith(github.ref, 'refs/tags/droidian')
+      - name: Create release
+        id: release
         uses: softprops/action-gh-release@v1
         with:
           files: droidian-out/SHA256SUMS
-          tag_name: ${{ github.ref }}
-          draft: true
-          prerelease: false
-
-      - name: Create nightly release
-        id: create_nightly
-        if: startsWith(github.ref, 'refs/tags/droidian') != true
-        uses: softprops/action-gh-release@v1
-        with:
-          files: droidian-out/SHA256SUMS
-          tag_name: nightly
-          draft: false
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/droidian') && github.ref || 'nightly' }}
+          draft: ${{ startsWith(github.ref, 'refs/tags/droidian') }}
           prerelease: false
 
   publish:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: [once, prepare]
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}${{ steps.create_nightly.outputs.upload_url }}
-
     strategy:
       fail-fast: false
       matrix:
@@ -177,74 +165,46 @@ jobs:
 
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: droidian-out-${{ matrix.config.product }}-${{ matrix.config.arch }}-${{ matrix.config.edition }}-${{ matrix.config.variant }}-${{ matrix.config.apilevel }}
           path: droidian-out
 
-      - name: Create stable release (drafted)
-        id: create_release
-        if: startsWith(github.ref, 'refs/tags/droidian')
+      - name: Upload to release
         uses: softprops/action-gh-release@v1
         with:
           files: droidian-out/*
-          tag_name: ${{ github.ref }}
-          draft: true
-          prerelease: false
-
-      - name: Create nightly release
-        id: create_nightly
-        if: startsWith(github.ref, 'refs/tags/droidian') != true
-        uses: softprops/action-gh-release@v1
-        with:
-          files: droidian-out/*
-          tag_name: nightly
-          draft: false
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/droidian') && github.ref || 'nightly' }}
+          draft: ${{ startsWith(github.ref, 'refs/tags/droidian') }}
           prerelease: false
 
   publish_installer:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs: [once, prepare, publish]
     strategy:
       fail-fast: false
       matrix:
         config: ${{ fromJson(needs.once.outputs.matrix) }}
 
-    name: Publish ${{ matrix.config.job_name }} for Droidian installer
+    name: Publish installer ${{ matrix.config.job_name }}
 
     steps:
       - name: Download artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: droidian-out-${{ matrix.config.product }}-${{ matrix.config.arch }}-${{ matrix.config.edition }}-${{ matrix.config.variant }}-${{ matrix.config.apilevel }}
-          path: droidian-droidian-installer
+          path: droidian-installer
 
-      - name: Check if droidian-installer tag already exists
-        id: droidian_installer_exists
-        uses: mukunku/tag-exists-action@v1.0.0
-        with:
-          tag: droidian-installer
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Tag droidian installer snapshot if doesn't exist
-        if: ${{ (startsWith(github.ref, 'refs/tags/droidian') != true) && (steps.droidian_installer_exists.outputs.exists == 'false') }}
-        uses: tvdias/github-tagger@v0.0.1
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          tag: droidian-installer
-
-      - name: Prepare droidian installer img files
+      - name: Prepare installer zip
         run: |
-          mv droidian-droidian-installer/droidian-UNOFFICIAL*.zip droidian-droidian-installer/droidian-UNOFFICIAL_${{ matrix.config.product }}-${{ matrix.config.arch }}-${{ matrix.config.edition }}-${{ matrix.config.variant }}-${{ matrix.config.apilevel }}.zip
-      - name: Create droidian installer release
-        id: create_nightly
-        if: startsWith(github.ref, 'refs/tags/droidian') != true
+          mv droidian-installer/droidian-UNOFFICIAL*.zip droidian-installer/droidian-UNOFFICIAL_${{ matrix.config.product }}-${{ matrix.config.arch }}-${{ matrix.config.edition }}-${{ matrix.config.variant }}-${{ matrix.config.apilevel }}.zip
+
+      - name: Upload installer
         uses: svenstaro/upload-release-action@2.3.0
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           tag: droidian-installer
-          file: droidian-droidian-installer/*.zip
+          file: droidian-installer/*.zip
           file_glob: true
           overwrite: true
           prerelease: true

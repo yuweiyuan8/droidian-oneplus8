@@ -77,17 +77,7 @@ jobs:
 
       - name: Build rootfs
         run: |
-         docker run --rm --privileged \
-         -v ${PWD}:/buildd/sources \
-         -v /tmp/buildd-results:/buildd/out \
-         quay.io/droidian/rootfs-builder:trixie-amd64 \
-         /bin/sh -c 'set -e
-         cd /buildd/sources
-
-         DROIDIAN_VERSION="nightly" \
-         ./generate_device_recipe.py oneplus_oneplus8 arm64 phosh phone 29
-
-         debos --disable-fakemachine generated/droidian.yaml'
+          docker exec $CONTAINER_HASH /bin/sh -c 'cd /buildd/sources; DROIDIAN_VERSION="${{ env.DROIDIAN_VERSION }}" ./generate_device_recipe.py ${{ matrix.config.product }} ${{ matrix.config.arch }} ${{ matrix.config.edition }} ${{ matrix.config.variant }} ${{ matrix.config.apilevel }} && debos --disable-fakemachine generated/droidian.yaml'
     
   prepare:
     runs-on: ubuntu-22.04

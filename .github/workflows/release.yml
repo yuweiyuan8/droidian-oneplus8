@@ -78,7 +78,7 @@ jobs:
 
       - name: Build rootfs
         run: |
-          docker exec quay.io/droidian/rootfs-builder:trixie-amd64 /bin/sh -c 'cd /buildd/sources; DROIDIAN_VERSION="${{ env.DROIDIAN_VERSION }}" ./generate_device_recipe.py ${{ matrix.config.product }} ${{ matrix.config.arch }} ${{ matrix.config.edition }} ${{ matrix.config.variant }} ${{ matrix.config.apilevel }} && debos --disable-fakemachine generated/droidian.yaml'
+          docker exec -it quay.io/droidian/rootfs-builder:trixie-amd64 /bin/sh -c 'cd /buildd/sources; DROIDIAN_VERSION="${{ env.DROIDIAN_VERSION }}" ./generate_device_recipe.py ${{ matrix.config.product }} ${{ matrix.config.arch }} ${{ matrix.config.edition }} ${{ matrix.config.variant }} ${{ matrix.config.apilevel }} && debos --disable-fakemachine generated/droidian.yaml'
     
   prepare:
     runs-on: ubuntu-22.04

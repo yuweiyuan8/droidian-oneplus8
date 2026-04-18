@@ -82,7 +82,7 @@ jobs:
              -v ${PWD}:/buildd/sources \
              --security-opt seccomp:unconfined \
              quay.io/droidian/rootfs-builder:trixie-amd64 \
-             sleep infinity
+             sleep infinity /sbin/init
 
       - name: Build rootfs
         run: |

@@ -73,13 +73,21 @@ jobs:
         run: docker pull quay.io/droidian/rootfs-builder:trixie-amd64
 
       - name: Start Container
-        run: docker run --detach --privileged -v /tmp/buildd-results:/buildd/out -v /dev:/host-dev -v /sys/fs/cgroup:/sys/fs/cgroup -v ${PWD}:/buildd/sources --security-opt seccomp:unconfined -it quay.io/droidian/rootfs-builder:trixie-amd64
-
+        run: |
+             docker run --detach --privileged \
+             --name droidian-builder \
+             -v /tmp/buildd-results:/buildd/out \
+             -v /dev:/host-dev \
+             -v /sys/fs/cgroup:/sys/fs/cgroup \
+             -v ${PWD}:/buildd/sources \
+             --security-opt seccomp:unconfined \
+             quay.io/droidian/rootfs-builder:trixie-amd64 \
+             sleep infinity
 
       - name: Build rootfs
         run: |
-          docker exec -it quay.io/droidian/rootfs-builder:trixie-amd64 /bin/sh -c 'cd /buildd/sources; DROIDIAN_VERSION="${{ env.DROIDIAN_VERSION }}" ./generate_device_recipe.py ${{ matrix.config.product }} ${{ matrix.config.arch }} ${{ matrix.config.edition }} ${{ matrix.config.variant }} ${{ matrix.config.apilevel }} && debos --disable-fakemachine generated/droidian.yaml'
-    
+             docker exec droidian-builder /bin/sh -c 'cd /buildd/sources; DROIDIAN_VERSION="${{ env.DROIDIAN_VERSION }}" ./generate_device_recipe.py ${{ matrix.config.product }} ${{ matrix.config.arch }} ${{ matrix.config.edition }} ${{ matrix.config.variant }} ${{ matrix.config.apilevel }} && debos --disable-fakemachine generated/droidian.yaml'
+
   prepare:
     runs-on: ubuntu-22.04
     name: Prepare release

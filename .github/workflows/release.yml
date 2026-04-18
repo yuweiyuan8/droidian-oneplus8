@@ -73,7 +73,7 @@ jobs:
         run: docker pull quay.io/droidian/rootfs-builder:trixie-amd64
 
       - name: Start Container
-        run: docker run --detach --privileged -v /tmp/buildd-results:/buildd/out -v /dev:/host-dev -v /sys/fs/cgroup:/sys/fs/cgroup -v ${PWD}:/buildd/sources --security-opt seccomp:unconfined quay.io/droidian/rootfs-builder:trixie-amd64 /sbin/init
+        run: docker run --detach --privileged -v /tmp/buildd-results:/buildd/out -v /dev:/host-dev -v /sys/fs/cgroup:/sys/fs/cgroup -v ${PWD}:/buildd/sources --security-opt seccomp:unconfined -it quay.io/droidian/rootfs-builder:trixie-amd64
 
 
       - name: Build rootfs

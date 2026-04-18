@@ -78,7 +78,7 @@ jobs:
              --name droidian-builder \
              -v /tmp/buildd-results:/buildd/out \
              -v /dev:/host-dev \
-             -v /sys/fs/cgroup:/sys/fs/cgroup \
+             -v /sys/fs/cgroup:/sys/fs/cgroup:ro \
              -v ${PWD}:/buildd/sources \
              --security-opt seccomp:unconfined \
              quay.io/droidian/rootfs-builder:trixie-amd64 \
